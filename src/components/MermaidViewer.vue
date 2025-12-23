@@ -48,6 +48,90 @@ const resetZoom = () => {
   emit('update:scale', 1);
 };
 
+const downloadPng = async () => {
+  if (!container.value) return;
+  
+  const svgElement = container.value.querySelector('svg');
+  if (!svgElement) return;
+  
+  // Clone SVG
+  const clonedSvg = svgElement.cloneNode(true) as SVGSVGElement;
+  
+  // Get SVG dimensions from viewBox or attributes (not getBoundingClientRect which can be clipped)
+  let svgWidth: number;
+  let svgHeight: number;
+  
+  const viewBox = svgElement.getAttribute('viewBox');
+  if (viewBox) {
+    const parts = viewBox.split(/\s+|,/).map(Number);
+    svgWidth = parts[2] || 800;
+    svgHeight = parts[3] || 600;
+  } else {
+    // Fallback to width/height attributes or getBBox
+    const bbox = svgElement.getBBox();
+    svgWidth = bbox.width + bbox.x * 2;
+    svgHeight = bbox.height + bbox.y * 2;
+  }
+  
+  const scale = 2; // 2x for better quality
+  const width = svgWidth * scale;
+  const height = svgHeight * scale;
+  
+  clonedSvg.setAttribute('width', width.toString());
+  clonedSvg.setAttribute('height', height.toString());
+  clonedSvg.setAttribute('viewBox', `0 0 ${svgWidth} ${svgHeight}`);
+  
+  // Inline all computed styles to avoid external dependencies
+  const allElements = clonedSvg.querySelectorAll('*');
+  allElements.forEach((el) => {
+    const computedStyle = window.getComputedStyle(el as Element);
+    const importantStyles = ['fill', 'stroke', 'stroke-width', 'font-family', 'font-size', 'font-weight', 'text-anchor', 'dominant-baseline'];
+    importantStyles.forEach(prop => {
+      const value = computedStyle.getPropertyValue(prop);
+      if (value) {
+        (el as HTMLElement).style.setProperty(prop, value);
+      }
+    });
+  });
+  
+  // Add white background rect
+  const bgRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+  bgRect.setAttribute('width', '100%');
+  bgRect.setAttribute('height', '100%');
+  bgRect.setAttribute('fill', '#ffffff');
+  clonedSvg.insertBefore(bgRect, clonedSvg.firstChild);
+  
+  // Serialize SVG to string
+  const serializer = new XMLSerializer();
+  let svgString = serializer.serializeToString(clonedSvg);
+  
+  // Encode to base64 data URL (avoids CORS/tainted canvas issues)
+  const base64 = btoa(unescape(encodeURIComponent(svgString)));
+  const dataUrl = `data:image/svg+xml;base64,${base64}`;
+  
+  const img = new Image();
+  img.onload = () => {
+    // Create canvas
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    
+    // Draw image
+    ctx.drawImage(img, 0, 0, width, height);
+    
+    // Download
+    const link = document.createElement('a');
+    link.download = `mermaid-diagram-${Date.now()}.png`;
+    link.href = canvas.toDataURL('image/png');
+    link.click();
+  };
+  
+  img.src = dataUrl;
+};
+
 const renderDiagram = async () => {
   if (container.value && props.code) {
     try {
@@ -101,6 +185,9 @@ watch(() => props.code, () => {
       </button>
       <button @click="resetZoom" class="control-btn reset-btn" title="Reset Zoom">
         <span class="btn-text">↻</span>
+      </button>
+      <button @click="downloadPng" class="control-btn download-btn" title="Download PNG">
+        <span class="material-icons">download</span>
       </button>
     </div>
 
@@ -190,6 +277,16 @@ watch(() => props.code, () => {
   border-left: 1px solid #e0e0e0;
   margin-left: 4px;
   padding-left: 8px;
+}
+
+.download-btn {
+  border-left: 1px solid #e0e0e0;
+  margin-left: 4px;
+  padding-left: 8px;
+}
+
+.download-btn .material-icons {
+  font-size: 18px;
 }
 
 .btn-text {
