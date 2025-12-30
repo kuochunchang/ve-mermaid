@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue';
 import mermaid from 'mermaid';
+import { onMounted, ref, watch } from 'vue';
 
 const props = defineProps<{
   code: string;
@@ -18,6 +18,8 @@ const container = ref<HTMLDivElement | null>(null);
 mermaid.initialize({
   startOnLoad: false,
   theme: 'default',
+  // Theme variables can be injected here if we want specific overrides
+  // themeVariables: { ... },
   securityLevel: 'loose',
   flowchart: {
     htmlLabels: true,
@@ -57,7 +59,7 @@ const downloadPng = async () => {
   // Clone SVG
   const clonedSvg = svgElement.cloneNode(true) as SVGSVGElement;
   
-  // Get SVG dimensions from viewBox or attributes (not getBoundingClientRect which can be clipped)
+  // Get SVG dimensions
   let svgWidth: number;
   let svgHeight: number;
   
@@ -67,7 +69,7 @@ const downloadPng = async () => {
     svgWidth = parts[2] || 800;
     svgHeight = parts[3] || 600;
   } else {
-    // Fallback to width/height attributes or getBBox
+    // Fallback
     const bbox = svgElement.getBBox();
     svgWidth = bbox.width + bbox.x * 2;
     svgHeight = bbox.height + bbox.y * 2;
@@ -81,7 +83,7 @@ const downloadPng = async () => {
   clonedSvg.setAttribute('height', height.toString());
   clonedSvg.setAttribute('viewBox', `0 0 ${svgWidth} ${svgHeight}`);
   
-  // Inline all computed styles to avoid external dependencies
+  // Inline styles
   const allElements = clonedSvg.querySelectorAll('*');
   allElements.forEach((el) => {
     const computedStyle = window.getComputedStyle(el as Element);
@@ -94,24 +96,21 @@ const downloadPng = async () => {
     });
   });
   
-  // Add white background rect
+  // Add white background
   const bgRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
   bgRect.setAttribute('width', '100%');
   bgRect.setAttribute('height', '100%');
   bgRect.setAttribute('fill', '#ffffff');
   clonedSvg.insertBefore(bgRect, clonedSvg.firstChild);
   
-  // Serialize SVG to string
   const serializer = new XMLSerializer();
   let svgString = serializer.serializeToString(clonedSvg);
   
-  // Encode to base64 data URL (avoids CORS/tainted canvas issues)
   const base64 = btoa(unescape(encodeURIComponent(svgString)));
   const dataUrl = `data:image/svg+xml;base64,${base64}`;
   
   const img = new Image();
   img.onload = () => {
-    // Create canvas
     const canvas = document.createElement('canvas');
     canvas.width = width;
     canvas.height = height;
@@ -119,10 +118,8 @@ const downloadPng = async () => {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     
-    // Draw image
     ctx.drawImage(img, 0, 0, width, height);
     
-    // Download
     const link = document.createElement('a');
     link.download = `mermaid-diagram-${Date.now()}.png`;
     link.href = canvas.toDataURL('image/png');
@@ -145,6 +142,7 @@ const renderDiagram = async () => {
           } else {
               emit('error', 'Syntax error');
           }
+           // Even if parse fails, we might still want to try rendering or clear
           return;
       }
 
@@ -173,28 +171,38 @@ watch(() => props.code, () => {
 
 <template>
   <div class="viewer-root">
-    <div class="controls">
-      <button @click="zoomOut" class="control-btn" title="Zoom Out">
-        <span class="btn-text">−</span>
-      </button>
-      <div class="zoom-display">
-        <span class="zoom-value">{{ Math.round(props.scale * 100) }}%</span>
-      </div>
-      <button @click="zoomIn" class="control-btn" title="Zoom In">
-        <span class="btn-text">+</span>
-      </button>
-      <button @click="resetZoom" class="control-btn reset-btn" title="Reset Zoom">
-        <span class="btn-text">↻</span>
-      </button>
-      <button @click="downloadPng" class="control-btn download-btn" title="Download PNG">
-        <span class="material-icons">download</span>
-      </button>
-    </div>
-
-    <div class="scroll-container">
-      <div class="zoom-container" :style="{ zoom: props.scale }">
+    <div class="scroll-container custom-scrollbar">
+      <div class="zoom-container" :style="{ transform: `scale(${scale})`, transformOrigin: 'top left' }">
+         <!-- Note: using transform scale instead of zoom property for better compatibility and text rendering -->
         <div ref="container" class="mermaid-content"></div>
       </div>
+    </div>
+
+    <!-- Modern Floating Controls -->
+    <div class="controls-panel">
+      <div class="control-group">
+        <button @click="zoomOut" class="control-btn" title="Zoom Out">
+          <span class="material-icons">remove</span>
+        </button>
+        <div class="zoom-display">
+          {{ Math.round(props.scale * 100) }}%
+        </div>
+        <button @click="zoomIn" class="control-btn" title="Zoom In">
+           <span class="material-icons">add</span>
+        </button>
+      </div>
+      
+      <div class="divider"></div>
+      
+      <button @click="resetZoom" class="control-btn" title="Reset Zoom">
+        <span class="material-icons">restart_alt</span>
+      </button>
+      
+      <div class="divider"></div>
+      
+      <button @click="downloadPng" class="control-btn primary" title="Download PNG">
+        <span class="material-icons">download</span>
+      </button>
     </div>
   </div>
 </template>
@@ -206,106 +214,134 @@ watch(() => props.code, () => {
   position: relative;
   overflow: hidden;
   flex: 1;
-  background: #fafafa;
+  background: var(--color-bg-tertiary); /* Slightly different background for viewer area */
+  display: flex;
+  flex-direction: column;
 }
 
 .scroll-container {
   width: 100%;
   height: 100%;
   overflow: auto;
-  display: flex;
+  padding: 32px; /* Extra padding for better scrolling */
+  box-sizing: border-box;
 }
 
 .zoom-container {
-  margin: auto;
-  flex-shrink: 0;
+  /* Use transform for scaling to avoid layout shifts and improve performance */
+  transition: transform 0.1s ease-out;
+  min-width: 100%;
+  min-height: 100%;
+  display: flex;
+  justify-content: center; /* Center horizontally */
 }
 
 .mermaid-content {
-  padding: 24px;
-  box-sizing: border-box;
+  /* Ensure content doesn't collapse */
+  display: inline-block; 
+}
+
+/* Custom Scrollbar */
+.scroll-container::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+.scroll-container::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scroll-container::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: var(--radius-full);
+  border: 2px solid var(--color-bg-tertiary); /* Adds padding effect */
+}
+.scroll-container::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text-tertiary);
 }
 
 :deep(svg) {
   max-width: none !important; 
   height: auto !important;
   display: block;
-  margin: auto;
-  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
+  /* Add subtle shadow to the diagram itself */
+  filter: drop-shadow(var(--shadow-sm));
 }
 
-.controls {
+/* Modern Controls Panel */
+.controls-panel {
   position: absolute;
-  bottom: 16px;
-  right: 16px;
-  background: white;
-  border-radius: 4px;
-  padding: 4px;
+  bottom: 24px;
+  right: 24px;
+  background: var(--color-bg-glass);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  padding: 6px;
   display: flex;
   align-items: center;
-  gap: 4px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1), 0 4px 8px rgba(0, 0, 0, 0.1);
+  gap: 8px;
+  box-shadow: var(--shadow-lg);
   z-index: 100;
+  transition: all var(--transition-normal);
+}
+
+.controls-panel:hover {
+  box-shadow: var(--shadow-xl), var(--shadow-glow);
+  transform: translateY(-2px);
+}
+
+.control-group {
+  display: flex;
+  align-items: center;
+  background: var(--color-bg-tertiary);
+  border-radius: var(--radius-full);
+  padding: 2px;
 }
 
 .control-btn {
-  width: 36px;
-  height: 36px;
-  border: none;
-  background: transparent;
-  border-radius: 4px;
-  cursor: pointer;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-full);
   display: flex;
   justify-content: center;
   align-items: center;
-  font-weight: 500;
-  color: #616161;
-  padding: 0;
-  transition: all 0.2s ease;
+  color: var(--color-text-secondary);
+  transition: all var(--transition-fast);
 }
 
 .control-btn:hover {
-  background: #e3f2fd;
-  color: #1976d2;
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
 }
 
-.control-btn:active {
-  background: #bbdefb;
+.control-btn.primary {
+  background: var(--color-accent-primary);
+  color: white;
 }
 
-.reset-btn {
-  border-left: 1px solid #e0e0e0;
-  margin-left: 4px;
-  padding-left: 8px;
+.control-btn.primary:hover {
+  background: var(--color-accent-secondary);
+  transform: scale(1.05);
 }
 
-.download-btn {
-  border-left: 1px solid #e0e0e0;
-  margin-left: 4px;
-  padding-left: 8px;
-}
-
-.download-btn .material-icons {
+.control-btn .material-icons {
   font-size: 18px;
-}
-
-.btn-text {
-  font-size: 18px;
-  line-height: 1;
 }
 
 .zoom-display {
-  display: flex;
-  align-items: center;
-  padding: 0 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  font-variant-numeric: tabular-nums;
+  min-width: 48px;
+  text-align: center;
+  padding: 0 4px;
+  cursor: default;
 }
 
-.zoom-value {
-  font-size: 13px;
-  font-weight: 500;
-  color: #424242;
-  font-variant-numeric: tabular-nums;
-  min-width: 40px;
-  text-align: center;
+.divider {
+  width: 1px;
+  height: 20px;
+  background: var(--color-border);
 }
 </style>

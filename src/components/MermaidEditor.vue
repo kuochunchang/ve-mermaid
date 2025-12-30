@@ -25,8 +25,9 @@ graph TD
       spellcheck="false"
     ></textarea>
     
-    <transition name="error-slide">
+    <transition name="toast-slide">
       <div v-if="error" class="error-toast">
+        <div class="toast-indicator"></div>
         <span class="error-icon">⚠️</span>
         <span class="error-text">{{ error }}</span>
       </div>
@@ -49,69 +50,93 @@ graph TD
   width: 100%;
   resize: none;
   padding: 16px;
-  font-family: 'Roboto Mono', 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 14px;
   line-height: 1.6;
   border: none;
   outline: none;
-  background-color: #fafafa;
-  color: #212121;
+  background-color: var(--color-bg-secondary);
+  color: var(--color-text-primary);
   box-sizing: border-box;
-  transition: background-color 0.2s ease;
+  transition: background-color var(--transition-normal);
 }
 
 .editor-textarea:focus {
-  background-color: #ffffff;
-}
-
-.editor-textarea.has-error {
-  background-color: #ffebee;
+  background-color: var(--color-bg-primary); 
 }
 
 .editor-textarea::placeholder {
-  color: #9e9e9e;
+  color: var(--color-text-tertiary);
   opacity: 1;
 }
 
+/* Custom Scrollbar for Textarea */
+.editor-textarea::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.editor-textarea::-webkit-scrollbar-track {
+  background: transparent;
+}
+.editor-textarea::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: var(--radius-full);
+}
+.editor-textarea::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text-tertiary);
+}
+
+/* Error Toast Modernization */
 .error-toast {
   position: absolute;
-  bottom: 16px;
-  left: 16px;
-  right: 16px;
-  background: #f44336;
-  color: white;
+  bottom: 24px;
+  left: 24px;
+  right: 24px;
+  background: var(--color-bg-secondary);
+  color: var(--color-text-primary);
   padding: 12px 16px;
-  border-radius: 4px;
+  border-radius: var(--radius-md);
   font-size: 0.875rem;
   display: flex;
   align-items: center;
   gap: 12px;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-xl);
+  border: 1px solid var(--color-error);
+  overflow: hidden;
+  z-index: 20;
+}
+
+/* Red line on the left */
+.toast-indicator {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 4px;
+  background: var(--color-error);
 }
 
 .error-icon {
   font-size: 1.25rem;
   flex-shrink: 0;
+  margin-left: 4px;
 }
 
 .error-text {
   flex: 1;
   line-height: 1.4;
-  font-weight: 400;
+  font-weight: 500;
+  color: var(--color-text-secondary);
 }
 
-.error-slide-enter-active,
-.error-slide-leave-active {
-  transition: all 0.3s ease;
+.toast-slide-enter-active,
+.toast-slide-leave-active {
+  transition: all var(--transition-bounce);
 }
 
-.error-slide-enter-from {
+.toast-slide-enter-from,
+.toast-slide-leave-to {
   opacity: 0;
-  transform: translateY(10px);
-}
-
-.error-slide-leave-to {
-  opacity: 0;
-  transform: translateY(10px);
+  transform: translateY(20px) scale(0.95);
 }
 </style>
